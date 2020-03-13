@@ -55,9 +55,17 @@ function start () {
     sprite.position.x = x;
     walls.addChild(sprite);
   }
+  
+  var sprites = UI.getLayer('sprites');
+  // Create wall 'slice' sprites (ie rays)
+  for (var x = 0; x < Config.screenWidth; x++) {
+    sprite = new PIXI.Sprite(Resources.get('barrel')[0][4]);
+    sprite.position.x = x;
+    sprites.addChild(sprite);
+  }
 
   var map = new Map();
-  var player = new Player(22, 11.5, map);
+  var player = new Player(3.5, 1.5, map);//22, 11.5, map);
 
   requestAnimFrame( animate );
   setInterval(function () {

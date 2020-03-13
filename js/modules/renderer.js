@@ -8,7 +8,10 @@ var rayIdx, cameraX, rayPosX, rayPosY, rayDirX, rayDirY, mapX, mapY,
     oldTime = 0, frameTime, tint, zBuffer = [], spriteOrder = [], 
     spriteDistance = [], spriteIdx, oldTime = 0, frameTime, tint, 
     shadowDepth = 12;
-
+var posX = 22.0, posY = 11.5; //x and y start position
+var dirX = -1.0, dirY = 0.0; //initial direction vector
+var planeX = 0.0, planeY = 0.66; //the 2d raycaster version of camera plane
+  
 var Key = require('./input.js'),
     Config = require('./config.js'),
     Resources = require('./resources.js'),
@@ -133,8 +136,8 @@ function drawWalls(camera, map) {
   }
 
   map.sprites.sort(function (a, b) {
-    var distanceA = ((posX - a.x) * (posX - a.x) + (posY - a.y) * (posY - a.y));
-    var distanceB = ((posX - b.x) * (posX - b.x) + (posY - b.y) * (posY - b.y));
+    var distanceA = ((camera.position.x - a.x) * (camera.position.x - a.x) + (camera.position.y - a.y) * (camera.position.y - a.y));
+    var distanceB = ((camera.position.x - b.x) * (camera.position.x - b.x) + (camera.position.y - b.y) * (camera.position.y - b.y));
     if (distanceA < distanceB) {
       return -1
     }
@@ -143,6 +146,80 @@ function drawWalls(camera, map) {
     }
     return 0;
   });
+  
+  
+  //after sorting the sprites, do the projection and draw them
+   for(var texNum = 0; texNum < map.sprites.length; texNum++)
+   {
+      //translate sprite position to relative to camera
+	  var spriteX = map.sprites[texNum].x - camera.position.x;
+      var spriteY = map.sprites[texNum].y - camera.position.y;
+
+      //transform sprite with the inverse camera matrix
+      // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+      // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+      // [ planeY   dirY ]                                          [ -planeY  planeX ]
+
+      var invDet = 1.0 / (camera.plane.x * camera.direction.y - camera.direction.x * camera.plane.y); //required for correct matrix multiplication
+
+      var transformX = invDet * (camera.direction.y * spriteX - camera.direction.x * spriteY);
+      var transformY = invDet * (-camera.plane.y * spriteX + camera.plane.x * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
+
+      var spriteScreenX = parseInt((Config.screenWidth / 2) * (1 + transformX / transformY));
+
+      //calculate height of the sprite on screen
+      var spriteHeight = Math.abs(parseInt(Config.screenHeight / (transformY))); //using 'transformY' instead of the real distance prevents fisheye
+      //calculate lowest and highest pixel to fill in current stripe
+      var drawStartY = parseInt(-spriteHeight / 2 + Config.screenHeight / 2);
+      if(drawStartY < 0) 
+		  drawStartY = 0;
+      var drawEndY = parseInt(spriteHeight / 2 + Config.screenHeight / 2);
+      if(drawEndY >= Config.screenHeight) 
+		  drawEndY = Config.screenHeight - 1;
+
+      //calculate width of the sprite
+      var spriteWidth = Math.abs( parseInt (Config.screenHeight / (transformY)));
+      var drawStartX = parseInt(-spriteWidth / 2 + spriteScreenX);
+      if(drawStartX < 0) 
+		  drawStartX = 0;
+      var drawEndX = parseInt(spriteWidth / 2 + spriteScreenX);
+      if(drawEndX >= Config.screenWidth) 
+		  drawEndX = Config.screenWidth - 1;
+
+		//this.map.skybox.tilePosition.x
+	
+      //loop through every vertical stripe of the sprite on screen
+	  //WHEN STRIPPED !!!
+	  
+      for(var stripe = drawStartX; stripe < drawEndX; stripe++)
+      {
+        var texX = parseInt( parseInt(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * Config.texWidth / spriteWidth) / 256);
+        //console.log("trans "+transformY + " zbuffer " + zBuffer[stripe] + "stripe "+ stripe)
+		//the conditions in the if are:
+        //1) it's in front of camera plane so you don't see things behind you
+        //2) it's on the screen (left)
+        //3) it's on the screen (right)
+        //4) ZBuffer, with perpendicular distance
+        if(transformY > 0 && stripe > 0 && stripe < Config.screenWidth && transformY < zBuffer[stripe])
+		{
+			/*for(var y = drawStartY; y < drawEndY; y++) //for every pixel of the current stripe
+			{
+			  var d = (y) * 256 - h * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
+			  var texY = ((d * texHeight) / spriteHeight) / 256;
+			  var color = texture[sprite[spriteOrder[i]].texture][Config.texWidth * texY + texX]; //get current color from the texture
+			  if((color & 0x00FFFFFF) != 0) 
+				  buffer[y][stripe] = color; //paint pixel if it isn't black, black is the invisible color
+			}
+			
+			 var line = UI.getLayer('walls').children[rayIdx];*/
+			console.log('texnum '+texNum+' texx '+texX);
+			var line = UI.getLayer('sprites').children[stripe];
+			line.setTexture(Resources.get('barrel')[texNum][texX]);
+			line.position.y = drawStartY;
+			line.height = drawEndY - drawStartY;
+		}
+      }
+	}
 }
 
 module.exports = update;

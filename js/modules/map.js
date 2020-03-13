@@ -29,7 +29,7 @@ function Map() {
       [2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,5,5,5,5,5,5,5,5,5]
     ];
     this.sprites = [
-      {x:20.5, y:11.5, tex:10}
+      {x:3.5, y:6.5,tex:11}
     ];
     this.skyTexture = new PIXI.Texture.fromImage('assets/img/skybox.png');
     this.skybox = new PIXI.TilingSprite(this.skyTexture, Config.screenWidth, Config.screenHeight / 2);

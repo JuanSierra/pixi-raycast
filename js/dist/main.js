@@ -1,4 +1,4 @@
-(function e(t,n,r){function s(o,u){if(!n[o]){if(!t[o]){var a=typeof require=="function"&&require;if(!u&&a)return a(o,!0);if(i)return i(o,!0);throw new Error("Cannot find module '"+o+"'")}var f=n[o]={exports:{}};t[o][0].call(f.exports,function(e){var n=t[o][1][e];return s(n?n:e)},f,f.exports,e,t,n,r)}return n[o].exports}var i=typeof require=="function"&&require;for(var o=0;o<r.length;o++)s(r[o]);return s})({1:[function(require,module,exports){
+(function(){function r(e,n,t){function o(i,f){if(!n[i]){if(!e[i]){var c="function"==typeof require&&require;if(!f&&c)return c(i,!0);if(u)return u(i,!0);var a=new Error("Cannot find module '"+i+"'");throw a.code="MODULE_NOT_FOUND",a}var p=n[i]={exports:{}};e[i][0].call(p.exports,function(r){var n=e[i][1][r];return o(n||r)},p,p.exports,r,e,n,t)}return n[i].exports}for(var u="function"==typeof require&&require,i=0;i<t.length;i++)o(t[i]);return o}return r})()({1:[function(require,module,exports){
 /**
  * @license
  * pixi.js - v1.5.3
@@ -14643,7 +14643,7 @@ Object.defineProperty(PIXI.RGBSplitFilter.prototype, 'angle', {
 function Camera(x, y) {
     this.position = {x: x, y: y};
     this.direction = {x: -1, y: 0};
-    this.plane = {x: 0, y: 1};
+    this.plane = {x: 0, y:1};
 }
 
 Camera.prototype.update = function (dt) {
@@ -14708,6 +14708,7 @@ function start () {
   // add layers (DOCs)
   UI.addLayer('skybox');
   UI.addLayer('walls');
+  UI.addLayer('sprites');
   UI.addLayer('gun');
 
   var sprite, walls = UI.getLayer('walls');
@@ -14717,9 +14718,17 @@ function start () {
     sprite.position.x = x;
     walls.addChild(sprite);
   }
+  
+  var sprites = UI.getLayer('sprites');
+  // Create wall 'slice' sprites (ie rays)
+  for (var x = 0; x < Config.screenWidth; x++) {
+    sprite = new PIXI.Sprite(Resources.get('barrel')[0][4]);
+    sprite.position.x = x;
+    sprites.addChild(sprite);
+  }
 
   var map = new Map();
-  var player = new Player(22, 11.5, map);
+  var player = new Player(3.5, 1.5, map);//22, 11.5, map);
 
   requestAnimFrame( animate );
   setInterval(function () {
@@ -14793,6 +14802,9 @@ function Map() {
       [2,0,0,0,0,0,0,0,2,0,0,0,0,0,2,5,0,5,0,5,0,5,0,5],
       [2,2,0,0,0,0,0,2,2,2,0,0,0,2,2,0,5,0,5,0,0,0,5,5],
       [2,2,2,2,1,2,2,2,2,2,2,1,2,2,2,5,5,5,5,5,5,5,5,5]
+    ];
+    this.sprites = [
+      {x:3.5, y:6.5,tex:11}
     ];
     this.skyTexture = new PIXI.Texture.fromImage('assets/img/skybox.png');
     this.skybox = new PIXI.TilingSprite(this.skyTexture, Config.screenWidth, Config.screenHeight / 2);
@@ -14928,13 +14940,20 @@ Player.prototype.update = function (frameTime) {
 
 module.exports = Player;
 },{"../lib/pixi.dev.js":1,"./camera.js":2,"./config.js":3,"./input.js":5,"./resources.js":9,"./ui.js":10}],8:[function(require,module,exports){
-// Declaring all the variables outside of the loop is more efficient, 
-// and works well with the original c++ code which is very procedural
+/* Declaring all the variables outside of the loop is more efficient, 
+   and works well with the original c++ code which is very procedural
+   DON'T WORRY - as we're using browserify these will be scoped to
+   this module */
 var rayIdx, cameraX, rayPosX, rayPosY, rayDirX, rayDirY, mapX, mapY, 
-        sideDistX, sideDistY, deltaDistX, deltaDistY, perpWallDist, stepX,
-        stepY, hit, side, lineHeight, drawStart, drawEnd, color, time = 0, 
-        oldTime = 0, frameTime, tint, shadowDepth = 12;
-
+    sideDistX, sideDistY, deltaDistX, deltaDistY, perpWallDist, stepX,
+    stepY, hit, side, lineHeight, drawStart, drawEnd, color, time = 0,
+    oldTime = 0, frameTime, tint, zBuffer = [], spriteOrder = [], 
+    spriteDistance = [], spriteIdx, oldTime = 0, frameTime, tint, 
+    shadowDepth = 12;
+var posX = 22.0, posY = 11.5; //x and y start position
+var dirX = -1.0, dirY = 0.0; //initial direction vector
+var planeX = 0.0, planeY = 0.66; //the 2d raycaster version of camera plane
+  
 var Key = require('./input.js'),
     Config = require('./config.js'),
     Resources = require('./resources.js'),
@@ -15053,7 +15072,96 @@ function drawWalls(camera, map) {
     line.setTexture(Resources.get('texture')[texNum][texX]);
     line.position.y = drawStart;
     line.height = drawEnd - drawStart;
+
+    // store z dist for sprites!
+    zBuffer[rayIdx] = perpWallDist;
   }
+
+  map.sprites.sort(function (a, b) {
+    var distanceA = ((camera.position.x - a.x) * (camera.position.x - a.x) + (camera.position.y - a.y) * (camera.position.y - a.y));
+    var distanceB = ((camera.position.x - b.x) * (camera.position.x - b.x) + (camera.position.y - b.y) * (camera.position.y - b.y));
+    if (distanceA < distanceB) {
+      return -1
+    }
+    if (distanceA > distanceB) {
+      return 1;
+    }
+    return 0;
+  });
+  
+  
+  //after sorting the sprites, do the projection and draw them
+   for(var texNum = 0; texNum < map.sprites.length; texNum++)
+   {
+      //translate sprite position to relative to camera
+	  var spriteX = map.sprites[texNum].x - camera.position.x;
+      var spriteY = map.sprites[texNum].y - camera.position.y;
+
+      //transform sprite with the inverse camera matrix
+      // [ planeX   dirX ] -1                                       [ dirY      -dirX ]
+      // [               ]       =  1/(planeX*dirY-dirX*planeY) *   [                 ]
+      // [ planeY   dirY ]                                          [ -planeY  planeX ]
+
+      var invDet = 1.0 / (camera.plane.x * camera.direction.y - camera.direction.x * camera.plane.y); //required for correct matrix multiplication
+
+      var transformX = invDet * (camera.direction.y * spriteX - camera.direction.x * spriteY);
+      var transformY = invDet * (-camera.plane.y * spriteX + camera.plane.x * spriteY); //this is actually the depth inside the screen, that what Z is in 3D
+
+      var spriteScreenX = parseInt((Config.screenWidth / 2) * (1 + transformX / transformY));
+
+      //calculate height of the sprite on screen
+      var spriteHeight = Math.abs(parseInt(Config.screenHeight / (transformY))); //using 'transformY' instead of the real distance prevents fisheye
+      //calculate lowest and highest pixel to fill in current stripe
+      var drawStartY = parseInt(-spriteHeight / 2 + Config.screenHeight / 2);
+      if(drawStartY < 0) 
+		  drawStartY = 0;
+      var drawEndY = parseInt(spriteHeight / 2 + Config.screenHeight / 2);
+      if(drawEndY >= Config.screenHeight) 
+		  drawEndY = Config.screenHeight - 1;
+
+      //calculate width of the sprite
+      var spriteWidth = Math.abs( parseInt (Config.screenHeight / (transformY)));
+      var drawStartX = parseInt(-spriteWidth / 2 + spriteScreenX);
+      if(drawStartX < 0) 
+		  drawStartX = 0;
+      var drawEndX = parseInt(spriteWidth / 2 + spriteScreenX);
+      if(drawEndX >= Config.screenWidth) 
+		  drawEndX = Config.screenWidth - 1;
+
+		//this.map.skybox.tilePosition.x
+	
+      //loop through every vertical stripe of the sprite on screen
+	  //WHEN STRIPPED !!!
+	  
+      for(var stripe = drawStartX; stripe < drawEndX; stripe++)
+      {
+        var texX = parseInt( parseInt(256 * (stripe - (-spriteWidth / 2 + spriteScreenX)) * Config.texWidth / spriteWidth) / 256);
+        //console.log("trans "+transformY + " zbuffer " + zBuffer[stripe] + "stripe "+ stripe)
+		//the conditions in the if are:
+        //1) it's in front of camera plane so you don't see things behind you
+        //2) it's on the screen (left)
+        //3) it's on the screen (right)
+        //4) ZBuffer, with perpendicular distance
+        if(transformY > 0 && stripe > 0 && stripe < Config.screenWidth && transformY < zBuffer[stripe])
+		{
+			/*for(var y = drawStartY; y < drawEndY; y++) //for every pixel of the current stripe
+			{
+			  var d = (y) * 256 - h * 128 + spriteHeight * 128; //256 and 128 factors to avoid floats
+			  var texY = ((d * texHeight) / spriteHeight) / 256;
+			  var color = texture[sprite[spriteOrder[i]].texture][Config.texWidth * texY + texX]; //get current color from the texture
+			  if((color & 0x00FFFFFF) != 0) 
+				  buffer[y][stripe] = color; //paint pixel if it isn't black, black is the invisible color
+			}
+			
+			 var line = UI.getLayer('walls').children[rayIdx];*/
+			console.log('texnum '+texNum+' texx '+texX);
+			var line = UI.getLayer('sprites').children[stripe];
+			line.setTexture(Resources.get('barrel')[texNum][texX]);
+			line.position.y = drawStartY;
+			line.height = drawEndY - drawStartY;
+		}
+      }
+	}
 }
 
 module.exports = update;
@@ -15090,6 +15198,15 @@ var Resources = {
           gunTexture[i] = new PIXI.Texture(gunBase, new PIXI.Rectangle(i * 145, 0, 145, 145));
         }
         this.store('gun', gunTexture);
+		
+		var barrelTexture = [[]];
+		var barrelBase = PIXI.BaseTexture.fromImage('assets/img/barrel.png');
+        //barrelTexture[0] = new PIXI.Texture(barrelBase, new PIXI.Rectangle(0, 0, 64, 64));
+        for (var x = 0; x < Config.texWidth; x++) {
+            barrelTexture[0][x] = new PIXI.Texture(barrelBase, new PIXI.Rectangle(x, 0, 1, Config.texHeight));
+        }
+		
+        this.store('barrel', barrelTexture);
     },
     store: function (name, resource) {
         this.pool[name] = resource;
@@ -15159,4 +15276,4 @@ var UI = {
 };
 
 module.exports = UI;
-},{"../lib/pixi.dev.js":1}]},{},[4])
+},{"../lib/pixi.dev.js":1}]},{},[4]);

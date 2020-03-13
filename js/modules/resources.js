@@ -29,6 +29,15 @@ var Resources = {
           gunTexture[i] = new PIXI.Texture(gunBase, new PIXI.Rectangle(i * 145, 0, 145, 145));
         }
         this.store('gun', gunTexture);
+		
+		var barrelTexture = [[]];
+		var barrelBase = PIXI.BaseTexture.fromImage('assets/img/barrel.png');
+        //barrelTexture[0] = new PIXI.Texture(barrelBase, new PIXI.Rectangle(0, 0, 64, 64));
+        for (var x = 0; x < Config.texWidth; x++) {
+            barrelTexture[0][x] = new PIXI.Texture(barrelBase, new PIXI.Rectangle(x, 0, 1, Config.texHeight));
+        }
+		
+        this.store('barrel', barrelTexture);
     },
     store: function (name, resource) {
         this.pool[name] = resource;
