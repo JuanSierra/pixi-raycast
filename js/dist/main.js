@@ -15089,6 +15089,13 @@ function drawWalls(camera, map) {
     return 0;
   });
   
+	// Temporal patch due to dirty stripes
+    for (var x = 0; x < Config.screenWidth; x++) {
+		var line = UI.getLayer('sprites').children[x];
+		line.setTexture(Resources.get('barrel')[0][0]);
+		line.position.y = 0;
+		line.height = Config.screenHeight;
+	}
   
   //after sorting the sprites, do the projection and draw them
    for(var texNum = 0; texNum < map.sprites.length; texNum++)
@@ -15142,7 +15149,7 @@ function drawWalls(camera, map) {
         //2) it's on the screen (left)
         //3) it's on the screen (right)
         //4) ZBuffer, with perpendicular distance
-        if(transformY > 0 && stripe > 0 && stripe < Config.screenWidth && transformY < zBuffer[stripe])
+        if(transformY > 0 && stripe > 0 && stripe < Config.screenWidth && texX > 0)
 		{
 			/*for(var y = drawStartY; y < drawEndY; y++) //for every pixel of the current stripe
 			{
@@ -15154,11 +15161,35 @@ function drawWalls(camera, map) {
 			}
 			
 			 var line = UI.getLayer('walls').children[rayIdx];*/
-			console.log('texnum '+texNum+' texx '+texX);
-			var line = UI.getLayer('sprites').children[stripe];
-			line.setTexture(Resources.get('barrel')[texNum][texX]);
-			line.position.y = drawStartY;
-			line.height = drawEndY - drawStartY;
+			//console.log('painting');
+			
+			if(transformY < zBuffer[stripe]){
+				//console.log('before ' +texX)
+				var line = UI.getLayer('sprites').children[stripe];
+				tint = 0xFFFFFF;
+				if (side == 1) {
+				  // give one orientation of wall a darker tint for contrast
+				  tint -= 0x444444;
+				}
+				// also tint the slice darker, the further away it is
+				// increase shadowDepth to make the level darker
+				tint -= (0x010101 * Math.round(perpWallDist * shadowDepth));
+
+				if (tint <= 0x000000) {
+				  tint = 0x000000;
+				}
+				// apply the tint
+				line.tint = tint;
+	
+				line.setTexture(Resources.get('barrel')[texNum][texX]);
+				line.position.y = drawStartY;
+				line.height = drawEndY - drawStartY;
+			}else{
+				var line = UI.getLayer('sprites').children[stripe];
+				line.setTexture(Resources.get('barrel')[texNum][0]);
+				line.position.y = drawStartY;
+				line.height = drawEndY - drawStartY;
+			}
 		}
       }
 	}
